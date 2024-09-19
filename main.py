@@ -7,7 +7,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-token = "ODk5MTA5MTQzNzQ1NTI3ODI5.GTu-y3.AWA8z-JCWBSpHR4woETH7a6gpOx-GoxwyGPjj0"
+token = "redacted"
 
 client = commands.Bot(command_prefix = "&&", intents = discord.Intents.all())
 
