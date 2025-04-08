@@ -2,14 +2,14 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-english_words_set = set(line.strip() for line in open('fiveLetterWords.txt'))
-
 class wordle(commands.Cog):
   def __init__(self, client):
     self.client = client
 
   @app_commands.command(name = "wordle", description = "Attempts to solve your wordle")
   async def wordle(self, interaction: discord.Interaction, guess: str, colors: str, excluded_letters: str = "", excluded_positions: str = ""):
+    english_words_set = set(line.strip() for line in open('fiveLetterWords.txt'))
+
     if len(guess) != 5 or len(colors) != 5:
       error_embed = discord.Embed(title="This is not a valid input!", color=0xff0000)
       error_embed.set_author(name=interaction.user.display_name, icon_url=interaction.user.display_avatar)
