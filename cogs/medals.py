@@ -1,5 +1,5 @@
 import discord
-import sqlite3
+import aiosqlite
 import aiohttp
 from discord import app_commands
 from discord.ext import commands
@@ -17,6 +17,7 @@ class medals(commands.Cog):
     ])
     async def medals(self, interaction: discord.Interaction, type: str = '', username: str = ''):
         await interaction.response.defer()
+        print(f"medals command initiated - {interaction.user.display_name}")
 
         result_text = await self.get_medals_data(type, username)
 
@@ -51,184 +52,196 @@ class medals(commands.Cog):
             return await response.json()
 
     async def get_medals_data(self, type: str, username: str) -> str:
-        connection = sqlite3.connect("medals.db")
-        cursor = connection.cursor()
+        async with aiosqlite.connect("medals_backup.db") as connection:
+            cursor = await connection.cursor()
 
-        text = ""
+            text = ""
 
-        if type == "Gold" and username == '':
-            cursor.execute("""
-                SELECT username, COUNT(*) as gold_count
-                FROM medals
-                WHERE place = 1
-                GROUP BY username
-                ORDER BY gold_count DESC
-            """)
+            if type == "Gold" and username == '':
+                await cursor.execute("""
+                    SELECT username, COUNT(*) as gold_count
+                    FROM medals
+                    WHERE place = 1
+                    GROUP BY username
+                    ORDER BY gold_count DESC
+                """)
 
-            results = cursor.fetchall()
+                results = await cursor.fetchall()
 
-            count = 1
-            for row in results:
-                user, gold_count = row
-                if count <= 3:
-                    text += f"__{count}. {user} - {gold_count}__ \n"
-                else:
-                    text += f"{count}. {user} - {gold_count} \n"
-                count += 1
+                count = 1
+                for row in results:
+                    user, gold_count = row
+                    if count <= 3:
+                        text += f"__{count}. {user} - {gold_count}__ \n"
+                    else:
+                        text += f"{count}. {user} - {gold_count} \n"
+                    count += 1
 
-        elif type == "Gold" and username != '':
-            place = 1
-            cursor.execute("""
-                SELECT *
-                FROM medals
-                WHERE username = ? AND place = ?
-            """, (username, place))
+            elif type == "Gold" and username != '':
+                place = 1
+                await cursor.execute("""
+                    SELECT *
+                    FROM medals
+                    WHERE username = ? AND place = ?
+                """, (username, place))
 
-            results = cursor.fetchall()
+                results = await cursor.fetchall()
 
-            async with aiohttp.ClientSession() as session:
-                for row in reversed(results):
-                    badgeID = row[1]
+                async with aiohttp.ClientSession() as session:
+                    for row in reversed(results):
+                        badgeID = row[1]
 
-                    badge_info = await self.fetch_badge_info(session, badgeID)
-                    badgeName = badge_info["name"]
-                    badgeGame = badge_info["awardingUniverse"]["name"]
-                    gameID = badge_info["awardingUniverse"]["rootPlaceId"]
-                    gameURL = f"https://www.roblox.com/games/{gameID}/"
+                        badge_info = await self.fetch_badge_info(session, badgeID)
+                        badgeName = badge_info["name"]
+                        badgeGame = badge_info["awardingUniverse"]["name"]
+                        gameID = badge_info["awardingUniverse"]["rootPlaceId"]
+                        gameURL = f"https://www.roblox.com/games/{gameID}/"
 
-                    text += f"[{badgeGame}: {badgeName}]({gameURL}) 🥇\n"
+                        entry = f"[{badgeGame}: {badgeName}]({gameURL}) 🥇\n"
 
-        elif type == "Silver" and username == '':
-            cursor.execute("""
-                SELECT username, COUNT(*) as silver_count
-                FROM medals
-                WHERE place = 2
-                GROUP BY username
-                ORDER BY silver_count DESC
-            """)
+                        if len(text) + len(entry) > 4050:
+                            text += "More entries found but not displayed."
+                            break
+                        text += entry
 
-            results = cursor.fetchall()
+            elif type == "Silver" and username == '':
+                await cursor.execute("""
+                    SELECT username, COUNT(*) as silver_count
+                    FROM medals
+                    WHERE place = 2
+                    GROUP BY username
+                    ORDER BY silver_count DESC
+                """)
 
-            count = 1
-            for row in results:
-                user, silver_count = row
-                if count <= 3:
-                    text += f"__{count}. {user} - {silver_count}__ \n"
-                else:
-                    text += f"{count}. {user} - {silver_count} \n"
-                count += 1
+                results = await cursor.fetchall()
 
-        elif type == "Silver" and username != '':
-            place = 2
-            cursor.execute("""
-                SELECT *
-                FROM medals
-                WHERE username = ? AND place = ?
-            """, (username, place))
+                count = 1
+                for row in results:
+                    user, silver_count = row
+                    if count <= 3:
+                        text += f"__{count}. {user} - {silver_count}__ \n"
+                    else:
+                        text += f"{count}. {user} - {silver_count} \n"
+                    count += 1
 
-            results = cursor.fetchall()
+            elif type == "Silver" and username != '':
+                place = 2
+                await cursor.execute("""
+                    SELECT *
+                    FROM medals
+                    WHERE username = ? AND place = ?
+                """, (username, place))
 
-            async with aiohttp.ClientSession() as session:
-                for row in reversed(results):
-                    badgeID = row[1]
+                results = await cursor.fetchall()
 
-                    badge_info = await self.fetch_badge_info(session, badgeID)
-                    badgeName = badge_info["name"]
-                    badgeGame = badge_info["awardingUniverse"]["name"]
-                    gameID = badge_info["awardingUniverse"]["rootPlaceId"]
-                    gameURL = f"https://www.roblox.com/games/{gameID}/"
+                async with aiohttp.ClientSession() as session:
+                    for row in reversed(results):
+                        badgeID = row[1]
 
-                    text += f"[{badgeGame}: {badgeName}]({gameURL}) 🥈\n"
+                        badge_info = await self.fetch_badge_info(session, badgeID)
+                        badgeName = badge_info["name"]
+                        badgeGame = badge_info["awardingUniverse"]["name"]
+                        gameID = badge_info["awardingUniverse"]["rootPlaceId"]
+                        gameURL = f"https://www.roblox.com/games/{gameID}/"
 
-        elif type == "Bronze" and username == '':
-            cursor.execute("""
-                SELECT username, COUNT(*) as bronze_count
-                FROM medals
-                WHERE place = 3
-                GROUP BY username
-                ORDER BY bronze_count DESC
-            """)
+                        entry = f"[{badgeGame}: {badgeName}]({gameURL}) 🥈\n"
+                        
+                        if len(text) + len(entry) > 4050:
+                            text += "More entries found but not displayed."
+                            break
+                        text += entry
 
-            results = cursor.fetchall()
+            elif type == "Bronze" and username == '':
+                await cursor.execute("""
+                    SELECT username, COUNT(*) as bronze_count
+                    FROM medals
+                    WHERE place = 3
+                    GROUP BY username
+                    ORDER BY bronze_count DESC
+                """)
 
-            count = 1
-            for row in results:
-                user, bronze_count = row
-                if count <= 3:
-                    text += f"__{count}. {user} - {bronze_count}__ \n"
-                else:
-                    text += f"{count}. {user} - {bronze_count} \n"
-                count += 1
+                results = await cursor.fetchall()
 
-        elif type == "Bronze" and username != '':
-            place = 3
-            cursor.execute("""
-                SELECT *
-                FROM medals
-                WHERE username = ? AND place = ?
-            """, (username, place))
+                count = 1
+                for row in results:
+                    user, bronze_count = row
+                    if count <= 3:
+                        text += f"__{count}. {user} - {bronze_count}__ \n"
+                    else:
+                        text += f"{count}. {user} - {bronze_count} \n"
+                    count += 1
 
-            results = cursor.fetchall()
+            elif type == "Bronze" and username != '':
+                place = 3
+                await cursor.execute("""
+                    SELECT *
+                    FROM medals
+                    WHERE username = ? AND place = ?
+                """, (username, place))
 
-            async with aiohttp.ClientSession() as session:
-                for row in reversed(results):
-                    badgeID = row[1]
+                results = await cursor.fetchall()
 
-                    badge_info = await self.fetch_badge_info(session, badgeID)
-                    badgeName = badge_info["name"]
-                    badgeGame = badge_info["awardingUniverse"]["name"]
-                    gameID = badge_info["awardingUniverse"]["rootPlaceId"]
-                    gameURL = f"https://www.roblox.com/games/{gameID}/"
+                async with aiohttp.ClientSession() as session:
+                    for row in reversed(results):
+                        badgeID = row[1]
 
-                    text += f"[{badgeGame}: {badgeName}]({gameURL}) 🥉\n"
+                        badge_info = await self.fetch_badge_info(session, badgeID)
+                        badgeName = badge_info["name"]
+                        badgeGame = badge_info["awardingUniverse"]["name"]
+                        gameID = badge_info["awardingUniverse"]["rootPlaceId"]
+                        gameURL = f"https://www.roblox.com/games/{gameID}/"
 
-        elif type == '' and username == '':
-            cursor.execute("""
-                    SELECT username, 
+                        entry = f"[{badgeGame}: {badgeName}]({gameURL}) 🥉\n"
+                        
+                        if len(text) + len(entry) > 4050:
+                            text += "More entries found but not displayed."
+                            break
+                        text += entry
+
+            elif type == '' and username == '':
+                await cursor.execute("""
+                        SELECT username, 
+                            SUM(CASE WHEN place = 1 THEN 1 ELSE 0 END) as gold_count,
+                            SUM(CASE WHEN place = 2 THEN 1 ELSE 0 END) as silver_count,
+                            SUM(CASE WHEN place = 3 THEN 1 ELSE 0 END) as bronze_count
+                        FROM medals
+                        GROUP BY username
+                        ORDER BY (gold_count + silver_count + bronze_count) DESC
+                    """)
+
+                results = await cursor.fetchall()
+
+                count = 1
+                for row in results:
+                    user, gold_count, silver_count, bronze_count = row
+                    total_count = gold_count + silver_count + bronze_count
+                    if count <= 3:
+                        text += f"__{count}. {user} - {total_count} Medals (🥇 {gold_count}, 🥈 {silver_count}, 🥉 {bronze_count})__\n"
+                    else:
+                        text += f"{count}. {user} - {total_count} Medals (🥇 {gold_count}, 🥈 {silver_count}, 🥉 {bronze_count})\n"
+                    count += 1
+
+                    if count > 50:
+                        break
+
+            elif type == '' and username != '':
+                await cursor.execute("""
+                    SELECT 
                         SUM(CASE WHEN place = 1 THEN 1 ELSE 0 END) as gold_count,
                         SUM(CASE WHEN place = 2 THEN 1 ELSE 0 END) as silver_count,
                         SUM(CASE WHEN place = 3 THEN 1 ELSE 0 END) as bronze_count
                     FROM medals
-                    GROUP BY username
-                    ORDER BY (gold_count + silver_count + bronze_count) DESC
-                """)
+                    WHERE username = ?
+                """, (username,))
 
-            results = cursor.fetchall()
+                result = await cursor.fetchone()
+                gold_count, silver_count, bronze_count = result
 
-            count = 1
-            for row in results:
-                user, gold_count, silver_count, bronze_count = row
-                total_count = gold_count + silver_count + bronze_count
-                if count <= 3:
-                    text += f"__{count}. {user} - {total_count} Medals (🥇 {gold_count}, 🥈 {silver_count}, 🥉 {bronze_count})__\n"
+                if gold_count is None:
+                    text += f"{username} has no medals."
                 else:
-                    text += f"{count}. {user} - {total_count} Medals (🥇 {gold_count}, 🥈 {silver_count}, 🥉 {bronze_count})\n"
-                count += 1
-
-                if count > 50:
-                    break
-
-        elif type == '' and username != '':
-            cursor.execute("""
-                SELECT 
-                    SUM(CASE WHEN place = 1 THEN 1 ELSE 0 END) as gold_count,
-                    SUM(CASE WHEN place = 2 THEN 1 ELSE 0 END) as silver_count,
-                    SUM(CASE WHEN place = 3 THEN 1 ELSE 0 END) as bronze_count
-                FROM medals
-                WHERE username = ?
-            """, (username,))
-
-            result = cursor.fetchone()
-            gold_count, silver_count, bronze_count = result
-
-            if gold_count is None:
-                text += f"{username} has no medals."
-            else:
-                total_count = gold_count + silver_count + bronze_count
-                text += f"{username} has a total of {total_count} Medals:\n🥇 {gold_count} Gold\n🥈 {silver_count} Silver\n🥉 {bronze_count} Bronze"
-
-        connection.commit()
-        connection.close()
+                    total_count = gold_count + silver_count + bronze_count
+                    text += f"{username} has a total of {total_count} Medals:\n🥇 {gold_count} Gold\n🥈 {silver_count} Silver\n🥉 {bronze_count} Bronze"
 
         return text
 
