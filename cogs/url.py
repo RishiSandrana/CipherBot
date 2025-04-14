@@ -34,10 +34,10 @@ async def url_checker(path):
                         return f"The website is:\n{url}"
 
             elif website == "discord":
-                url = f"https://{website}.com/invite/{path}"
+                url = f"https://discord.com/api/v8/invites/{path}"
                 async with session.get(url) as response:
                     if response.status == 200:
-                        return f"The website is:\n{url}"
+                        return f"The website is:\nhttps://discord.gg/{path}"
 
             else:
                 url = f"https://{website}.com/{path}"
