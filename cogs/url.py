@@ -1,43 +1,51 @@
 import discord
-import requests
-import asyncio
+import aiohttp
+import os
+
 from discord import app_commands
 from discord.ext import commands
 
-websiteTable = ["pastebin", "youtube", "bit", "discord"]
-client_id = 'f292ad7b2a4a114'
+websiteTable = ["pastebin", "imgur", "youtube", "bit", "discord"]
+client_id = os.environ.get("imgur_token")
 
-def url_checker(path):
-    for website in websiteTable:
-        if website == "youtube":
-            url = "https://" + website + ".com/watch?v=" + path
-            get = requests.get(url)
-            # print(get.text)
-            if get.status_code == 200 and "Dieses Video ist nicht mehr verfügbar" not in get.text:
-                return "The website is: \n" + url
-        elif website == "imgur":
-            get = requests.get(f"https://api.imgur.com/3/image/{path}", headers={"Authorization": f"Client-ID {client_id}"})
-            get2 = requests.get(f"https://api.imgur.com/3/album/{path}/images", headers={"Authorization": f"Client-ID {client_id}"}).json()
-            print(get.text)
-            if "Zoinks!" not in get.text:
-                url = "https://imgur.com/" + path
-                return "The website is: \n" + url
-            if get2['data'] != []:
-                url2 = "https://imgur.com/a/" + path
-                return "The website is: \n" + url2
-        elif website == "bit":
-            url = "https://" + website + ".ly/" + path
-            get = requests.get(url)
-            if get.status_code == 200:
-                return "The website is: \n" + url
-        elif website == "discord":
-            url = "https://" + website + ".com/invite/" + path
-            get = requests.get(url)
-        else:
-            url = "https://" + website + ".com/" + path
-            get = requests.get(url)
-            if get.status_code == 200:
-                return "The website is: \n" + url
+async def url_checker(path):
+    async with aiohttp.ClientSession() as session:
+        for website in websiteTable:
+            if website == "youtube":
+                url = f"https://{website}.com/watch?v={path}"
+                async with session.get(url) as response:
+                    if response.status == 200:
+                        text = await response.text()
+                        if "This video isn't available anymore" not in text:
+                            return f"The website is:\n{url}"
+
+            elif website == "imgur":
+                imgur_url = f"https://api.imgur.com/3/album/{path}/images"
+                headers = {"Authorization": f"Client-ID {client_id}"}
+
+                async with session.get(imgur_url, headers=headers) as img_response:
+                    if img_response.status == 200:
+                        return f"The website is:\nhttps://imgur.com/a/{path}"
+
+            elif website == "bit":
+                url = f"https://{website}.ly/{path}"
+                async with session.get(url) as response:
+                    if response.status == 200:
+                        return f"The website is:\n{url}"
+
+            elif website == "discord":
+                url = f"https://{website}.com/invite/{path}"
+                async with session.get(url) as response:
+                    if response.status == 200:
+                        return f"The website is:\n{url}"
+
+            else:
+                url = f"https://{website}.com/{path}"
+                async with session.get(url) as response:
+                    if response.status == 200:
+                        return f"The website is:\n{url}"
+
+    return None
 
 class url(commands.Cog):
     def __init__(self, client: commands.Bot):
@@ -47,8 +55,8 @@ class url(commands.Cog):
     async def url(self, interaction: discord.Interaction, message: str):
         await interaction.response.defer()
 
-        finalMessage = url_checker(message)
-        if finalMessage != None:
+        finalMessage = await url_checker(message)
+        if finalMessage:
             embed = discord.Embed(title="Your website link is:", description=finalMessage, color=0x1ba300)
             embed.set_author(name=interaction.user.display_name, icon_url=interaction.user.display_avatar)
             await interaction.followup.send(embed=embed)
