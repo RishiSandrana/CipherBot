@@ -2,9 +2,14 @@ import discord
 import base64
 import aiohttp
 import os
+import logging
+
 from openai import OpenAI
 from discord import app_commands
 from discord.ext import commands
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
 
@@ -23,7 +28,7 @@ class Gemini(commands.Cog):
 
         if file == None:
             completion = client.chat.completions.create(
-                model="google/gemini-2.5-pro-exp-03-25:free",
+                model="google/gemini-2.0-flash-thinking-exp:free",
                 messages=[
                     {
                     "role": "user",
@@ -49,10 +54,10 @@ class Gemini(commands.Cog):
                         image_base64 = base64.b64encode(image_data).decode("utf-8")
                         image_base64_string = f"data:image/{file_format};base64,{image_base64}"
 
-                        print(f"Image completion started - {interaction.user.display_name}")
+                        logger.info(f"Image completion started - {interaction.user.display_name}")
 
                         completion = client.chat.completions.create(
-                            model="google/gemini-2.5-pro-exp-03-25:free",
+                            model="google/gemini-2.0-flash-thinking-exp:free",
                             messages=[
                                 {
                                     "role": "user",
@@ -72,7 +77,7 @@ class Gemini(commands.Cog):
                             ]
                         )
 
-                        print(f"Image completion finished - {interaction.user.display_name}")
+                        logger.info(f"Image completion finished - {interaction.user.display_name}")
 
                         embed = discord.Embed(description=completion.choices[0].message.content, color=0x1ba300)
                         embed.set_author(name=interaction.user.display_name, icon_url=interaction.user.display_avatar.url)
