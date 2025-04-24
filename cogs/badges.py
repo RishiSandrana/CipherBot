@@ -3,6 +3,7 @@ import discord
 import asyncio
 import logging
 import os
+import json
 
 from datetime import datetime
 from discord import app_commands
@@ -132,8 +133,27 @@ class Badges(commands.Cog):
                     text += f"Username: {username}\nDate: {date}\n\n"
 
                 if medalCount in (1, 2, 3):
-                    async with session.get(f"{BASE_URL}?q={{\"username\":\"{username}\",\"badgeID\":\"{badge_id}\",\"place\":{medalCount}}}", headers=HEADERS) as response:
-                        if response.status == 200 and await response.json():
+                    query = json.dumps({
+                        "username": username,
+                        "badgeID": int(badge_id),
+                        "place": medalCount
+                    })
+
+                    fields = json.dumps({
+                        "$fields": {
+                            "username": 1,
+                            "badgeID": 1,
+                            "place": 1
+                        }
+                    })
+
+                    GET_URL = f"https://medals-4193.restdb.io/rest/medals?q={query}&h={fields}"
+
+                    async with session.get(GET_URL, headers=HEADERS) as response:
+                        json_data = await response.json()
+                        logger.info(json_data)
+
+                        if response.status == 200 and json_data:
                             logger.info(f"Duplicate found for {username}, badgeID {badge_id}, place {medalCount}. Skipping insert.")
                         else:
                             async with session.post(BASE_URL, json={
