@@ -20,23 +20,34 @@ class wordle(commands.Cog):
           for i, char in enumerate(excluded_positions):
             if char.isalpha() == True:
               number = int(excluded_positions[i+1])
-              if word.find(char) == (number - 1):
+              if word[number - 1] == char:
                 english_words_set.discard(word)
+
           for char in excluded_letters:
             if char in word:
               english_words_set.discard(word)
+
         elif excluded_letters != "" and excluded_positions == "":
           for char in excluded_letters:
             if char in word:
               english_words_set.discard(word)
+        
         for i in range(5):
           if colors[i] == "w" and guess[i] in word:
-            if guess.count(guess[i]) == 1:
+            required_occurrences = 0
+            for j in range(5):
+                if guess[j] == guess[i] and colors[j] in ("y", "g"):
+                    required_occurrences += 1
+
+            if required_occurrences == 0:
               english_words_set.discard(word)
+
           elif colors[i] == "g" and guess[i] != word[i]:
             english_words_set.discard(word)
+
           elif colors[i] == "y" and guess[i] not in word:
             english_words_set.discard(word)
+
           elif colors[i] == "y" and guess[i] == word[i]:
             english_words_set.discard(word)
 
