@@ -51,15 +51,16 @@ class Badges(commands.Cog):
             listOfUserIDs = []
             text = ""
 
-            # game_info = await (await session.get(f"https://apis.roblox.com/universes/v1/places/{badge_id}/universe")).json()
-            # if game_info["universeId"] != None:
-            #     logger.info(game_info)
-            #     error_embed = discord.Embed(title="You've entered a game ID instead of a badge ID. Please enter a valid badge ID.", color=0xff0000)
-            #     error_embed.set_author(name=interaction.user.display_name, icon_url=interaction.user.display_avatar)
-            #     await interaction.followup.send(embed=error_embed)
-            #     return 
-
             badge_info = await (await session.get(f"https://badges.roblox.com/v1/badges/{badge_id}")).json()
+
+            if "errors" in badge_info:
+                for error in badge_info["errors"]:
+                    if error["code"] == 1:
+                        error_embed = discord.Embed(title="The badge ID you provided is invalid or does not exist. Please try again with a valid badge ID.", color=0xff0000)
+                        error_embed.set_author(name=interaction.user.display_name, icon_url=interaction.user.display_avatar)
+                        await interaction.followup.send(embed=error_embed)
+                        return
+
             badgeName = badge_info["name"]
             badgeGame = badge_info["awardingUniverse"]["name"]
             gameID = badge_info["awardingUniverse"]["rootPlaceId"]
