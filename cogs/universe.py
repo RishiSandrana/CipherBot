@@ -35,39 +35,13 @@ class Universe(commands.Cog):
   def format_places(self, places: list) -> str:
     formatted_text = ""
     for item in places:
-      formatted_text += f"Name: {item['name']}\n"
-      formatted_text += f"ID: {item['id']}\n\n"
+      if len(formatted_text) > 4050:
+        formatted_text += "More entries found but not displayed."
+        break
+
+      formatted_text += f"Name: [{item['name']}](https://www.roblox.com/games/{item['id']})\n\n"
+      # formatted_text += f"ID: {item['id']}\n\n"
     return formatted_text
 
 async def setup(client: commands.Bot) -> None:
   await client.add_cog(Universe(client))
-
-# import discord
-# import requests
-# import asyncio
-# from discord import app_commands
-# from discord.ext import commands
-#
-# class universe(commands.Cog):
-#   def __init__(self, client: commands.Bot):
-#     self.client = client
-#
-#   @app_commands.command(name = "universe", description = "Find all the subplaces within a Roblox game")
-#   async def universe(self, interaction: discord.Interaction, place_id: str):
-#     await interaction.response.defer()
-#     await asyncio.sleep(4)
-#     x = ""
-#     universeID = requests.get("https://apis.roblox.com/universes/v1/places/" +
-#                           place_id + "/universe").json()["universeId"]
-#     universeID = str(universeID)
-#     allPlaces = requests.get("https://develop.roblox.com/v1/universes/" + universeID + "/places?isUniverseCreation=false&limit=100&sortOrder=Asc").json()
-#     for item in allPlaces["data"]:
-#       x += "Name: " + item['name'] + "\n"
-#       x += "ID: " + str(item['id']) + "\n\n"
-#
-#     embed=discord.Embed(title = "List of places: ", description=x, color=0x1ba300)
-#     embed.set_author(name=interaction.user.display_name, icon_url=interaction.user.display_avatar)
-#     await interaction.followup.send(embed=embed)
-#
-# async def setup(client: commands.Bot) -> None:
-#   await client.add_cog(universe(client))
