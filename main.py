@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 token = os.environ.get('token')
 
-client = commands.Bot(command_prefix = "&&", intents = discord.Intents.all())
+client = commands.Bot(command_prefix = "", intents = discord.Intents.default())
 
 @client.event
 async def on_ready():
