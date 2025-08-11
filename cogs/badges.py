@@ -1,9 +1,8 @@
-import aiohttp
 import discord
 import asyncio
 import logging
 import os
-import json
+import asyncpg
 
 from datetime import datetime
 from discord import app_commands
@@ -12,13 +11,7 @@ from discord.ext import commands
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-API_KEY = os.environ.get('medals_api_key')
-BASE_URL = "https://medals-4193.restdb.io/rest/medals"
-HEADERS = {
-    'content-type': "application/json",
-    'x-apikey': API_KEY,
-    'cache-control': "no-cache"
-}
+DB_URL = os.environ.get("DB_URL")
 
 listOfRMHRoleIDs = [3627780, 19516868, 25919204, 4059372, 26957538, 3927521, 3627781, 36896118, 36747671,
                     19962820, 3704753, 3720799, 36896024, 26492648, 4165630]
@@ -30,6 +23,14 @@ listOfExtraIDs = [55493551, 111675779, 158320913, 181682441, 153490353, 93955375
 class Badges(commands.Cog):
     def __init__(self, client: commands.Bot):
         self.client = client
+        self.pool = None
+
+    async def cog_load(self):
+        self.pool = await asyncpg.create_pool(DB_URL, min_size=1, max_size=5)
+
+    async def cog_unload(self):
+        if self.pool:
+            await self.pool.close()
 
     @app_commands.command(name="badges", description="Find people who have a certain badge")
     @app_commands.describe(type="Select your scope")
@@ -42,6 +43,7 @@ class Badges(commands.Cog):
         async def get_datetime(item):
             return datetime.fromisoformat(item[1].rstrip('Z'))
 
+        import aiohttp
         async with aiohttp.ClientSession() as session:
             await interaction.response.defer()
             logger.info(f"badges command initiated - {interaction.user.display_name}")
@@ -56,7 +58,9 @@ class Badges(commands.Cog):
             if "errors" in badge_info:
                 for error in badge_info["errors"]:
                     if error["code"] == 1:
-                        error_embed = discord.Embed(title="The badge ID you provided is invalid or does not exist. Please try again with a valid badge ID.", color=0xff0000)
+                        error_embed = discord.Embed(
+                            title="The badge ID you provided is invalid or does not exist. Please try again with a valid badge ID.",
+                            color=0xff0000)
                         error_embed.set_author(name=interaction.user.display_name, icon_url=interaction.user.display_avatar)
                         await interaction.followup.send(embed=error_embed)
                         return
@@ -69,7 +73,8 @@ class Badges(commands.Cog):
             user_queue = asyncio.Queue()
 
             async def fetch_users(roleID, groupID):
-                async with session.get(f'https://groups.roblox.com/v1/groups/{groupID}/roles/{roleID}/users?limit=100&sortOrder=Asc') as response:
+                async with session.get(
+                        f'https://groups.roblox.com/v1/groups/{groupID}/roles/{roleID}/users?limit=100&sortOrder=Asc') as response:
                     userResponse = await response.json()
                     for user in userResponse.get('data', []):
                         userId = user['userId']
@@ -92,7 +97,8 @@ class Badges(commands.Cog):
                     success = False
                     while not success:
                         try:
-                            async with session.get(f'https://badges.roproxy.com/v1/users/{userId}/badges/awarded-dates?badgeIds={badge_id}') as badgeResponse:
+                            async with session.get(
+                                    f'https://badges.roproxy.com/v1/users/{userId}/badges/awarded-dates?badgeIds={badge_id}') as badgeResponse:
                                 badgeData = await badgeResponse.json()
                                 logger.info(badgeData)
                                 if badgeData.get('data'):
@@ -127,54 +133,43 @@ class Badges(commands.Cog):
             await asyncio.gather(*tasks)
             await process_users()
 
+            # Sort by awarded date
             sorted_items = await asyncio.gather(*[get_datetime(item) for item in dictOfUsernames.items()])
             sorted_data = dict(sorted(zip(dictOfUsernames.keys(), sorted_items), key=lambda x: x[1]))
 
             medalCount = 1
-            for username, date in sorted_data.items():
-                if medalCount == 1:
-                    text += f"Username: {username} :first_place: \nDate: {date}\n\n"
-                elif medalCount == 2:
-                    text += f"Username: {username} :second_place: \nDate: {date}\n\n"
-                elif medalCount == 3:
-                    text += f"Username: {username} :third_place: \nDate: {date}\n\n"
-                else:
-                    text += f"Username: {username}\nDate: {date}\n\n"
 
-                if medalCount in (1, 2, 3):
-                    query = json.dumps({
-                        "username": username,
-                        "badgeID": int(badge_id),
-                        "place": medalCount
-                    })
+            async with self.pool.acquire() as conn:
+                for username, date in sorted_data.items():
+                    if medalCount == 1:
+                        text += f"Username: {username} :first_place: \nDate: {date}\n\n"
+                    elif medalCount == 2:
+                        text += f"Username: {username} :second_place: \nDate: {date}\n\n"
+                    elif medalCount == 3:
+                        text += f"Username: {username} :third_place: \nDate: {date}\n\n"
+                    else:
+                        text += f"Username: {username}\nDate: {date}\n\n"
+                    
+                    if medalCount in (1, 2, 3):
+                        # Check for duplicate
+                        existing = await conn.fetchrow(
+                            "SELECT 1 FROM medals WHERE username = $1 AND badgeid = $2 AND place = $3",
+                            username, int(badge_id), medalCount
+                        )
 
-                    fields = json.dumps({
-                        "$fields": {
-                            "username": 1,
-                            "badgeID": 1,
-                            "place": 1
-                        }
-                    })
-
-                    GET_URL = f"https://medals-4193.restdb.io/rest/medals?q={query}&h={fields}"
-
-                    async with session.get(GET_URL, headers=HEADERS) as response:
-                        json_data = await response.json()
-                        logger.info(json_data)
-
-                        if response.status == 200 and json_data:
-                            logger.info(f"Duplicate found for {username}, badgeID {badge_id}, place {medalCount}. Skipping insert.")
+                        if existing:
+                            logger.info(f"Duplicate found for {username}, badgeid {badge_id}, place {medalCount}. Skipping insert.")
                         else:
-                            async with session.post(BASE_URL, json={
-                                "username": username,
-                                "badgeID": badge_id,
-                                "place": medalCount
-                            }, headers=HEADERS) as insert_response:
-                                if insert_response.status != 201:
-                                    logger.warning(f"Failed to insert data for {username} into restdb.io")
-                medalCount += 1
-                if len(text) > 4020:
-                    break
+                            # Insert new medal record
+                            await conn.execute(
+                                "INSERT INTO medals(username, badgeid, place) VALUES ($1, $2, $3)",
+                                username, int(badge_id), medalCount
+                            )
+
+                    medalCount += 1
+
+                    if len(text) > 4020:
+                        break
 
             embed = discord.Embed(title=f"{badgeGame}: {badgeName}", url=gameURL, description=text, color=0x1ba300)
             embed.set_author(name=interaction.user.display_name, icon_url=interaction.user.display_avatar)
